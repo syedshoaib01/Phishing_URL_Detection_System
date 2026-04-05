@@ -1,87 +1,802 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phishing Detector</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhishGuard — URL Threat Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ── TOKENS ───────────────────────────────────────────── */
+    :root {
+      --bg:        #080b10;
+      --bg2:       #0d1117;
+      --bg3:       #111820;
+      --border:    rgba(255,255,255,0.07);
+      --border2:   rgba(255,255,255,0.12);
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --accent:    #00d4ff;
+      --accent2:   #0088aa;
+      --green:     #22c55e;
+      --green-bg:  rgba(34,197,94,0.08);
+      --green-bdr: rgba(34,197,94,0.25);
+      --red:       #ef4444;
+      --red-bg:    rgba(239,68,68,0.08);
+      --red-bdr:   rgba(239,68,68,0.25);
+      --terminal:  #00ff88;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Syne', sans-serif;
+    }
+
+    /* ── RESET ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow-x: hidden;
+    }
+
+    /* ── BACKGROUND GRID + GLOW ───────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 500px;
+      background: radial-gradient(ellipse at center, rgba(0,212,255,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── LAYOUT ───────────────────────────────────────────── */
+    .page {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 80px;
+    }
+
+    /* ── HEADER ───────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 56px;
+      animation: fadeDown 0.7s ease both;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+    }
+    .badge::before { content: '●'; font-size: 7px; animation: blink 1.4s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    h1 {
+      font-size: clamp(36px, 6vw, 68px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      background: linear-gradient(135deg, #ffffff 0%, var(--accent) 60%, #ffffff 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmerText 4s linear infinite;
+      margin-bottom: 14px;
+    }
+    @keyframes shimmerText {
+      0% { background-position: 0% center; }
+      100% { background-position: 200% center; }
+    }
+    .subtitle {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    .subtitle span { color: var(--accent); }
+
+    /* ── MAIN CARD ────────────────────────────────────────── */
+    .card {
+      width: 100%;
+      max-width: 680px;
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      padding: 32px;
+      animation: fadeUp 0.7s 0.1s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    /* ── INPUT AREA ───────────────────────────────────────── */
+    .input-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .input-label::before {
+      content: '//';
+      color: var(--accent);
+      font-size: 13px;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+    #url-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 14px 18px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #url-input::placeholder { color: var(--muted); }
+    #url-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
+    }
+    #submit-btn {
+      background: var(--accent);
+      color: var(--bg);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 24px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    #submit-btn:hover {
+      background: #19e0ff;
+      box-shadow: 0 0 24px rgba(0,212,255,0.35);
+    }
+    #submit-btn:active { transform: scale(0.97); }
+    #submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ── DIVIDER ──────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 28px 0;
+    }
+
+    /* ── LOADING STATE ────────────────────────────────────── */
+    #loading-section { display: none; }
+    #loading-section.visible { display: block; }
+
+    /* Terminal window */
+    .terminal {
+      background: #050810;
+      border: 1px solid rgba(0,255,136,0.15);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .terminal-bar {
+      background: #0d1117;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid rgba(0,255,136,0.08);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #28c840; }
+    .terminal-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 8px;
+      letter-spacing: 0.05em;
+    }
+    .terminal-body {
+      padding: 16px;
+      min-height: 140px;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+    }
+    .terminal-body::-webkit-scrollbar { width: 4px; }
+    .terminal-body::-webkit-scrollbar-track { background: transparent; }
+    .terminal-body::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.2); border-radius: 2px; }
+    .t-line {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(4px);
+      animation: lineIn 0.25s ease forwards;
+    }
+    @keyframes lineIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .t-prompt { color: var(--accent); flex-shrink: 0; }
+    .t-text { color: var(--terminal); }
+    .t-dim { color: #3a4a3a; }
+    .t-warn { color: #f59e0b; }
+    .t-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--terminal);
+      vertical-align: text-bottom;
+      animation: cursorBlink 0.8s step-end infinite;
+    }
+    @keyframes cursorBlink { 50% { opacity: 0; } }
+
+    /* Skeleton loading bars */
+    .skeleton-preview {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .skel-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .skel-bar {
+      height: 10px;
+      border-radius: 5px;
+      background: linear-gradient(90deg, var(--bg3) 25%, rgba(0,212,255,0.08) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.8s linear infinite;
+      margin-bottom: 8px;
+    }
+    .skel-bar:last-child { margin-bottom: 0; }
+    .skel-bar.w60 { width: 60%; }
+    .skel-bar.w80 { width: 80%; }
+    .skel-bar.w40 { width: 40%; }
+    .skel-bar.w100 { width: 100%; }
+    .skel-bar.tall { height: 32px; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Status message */
+    .status-msg {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      padding: 10px;
+      min-height: 36px;
+      transition: opacity 0.3s;
+    }
+    .status-dots::after {
+      content: '';
+      animation: dots 1.2s step-end infinite;
+    }
+    @keyframes dots {
+      0%   { content: ''; }
+      25%  { content: '.'; }
+      50%  { content: '..'; }
+      75%  { content: '...'; }
+    }
+
+    /* ── RESULT CARD ──────────────────────────────────────── */
+    #result-section { display: none; }
+    #result-section.visible { display: block; }
+
+    .result-card {
+      border-radius: 14px;
+      padding: 24px;
+      border: 1px solid;
+      animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.92) translateY(10px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .result-card.safe {
+      background: var(--green-bg);
+      border-color: var(--green-bdr);
+    }
+    .result-card.phishing {
+      background: var(--red-bg);
+      border-color: var(--red-bdr);
+    }
+
+    .verdict-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .verdict-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .safe .verdict-icon { background: rgba(34,197,94,0.15); }
+    .phishing .verdict-icon { background: rgba(239,68,68,0.15); }
+
+    .verdict-label {
+      font-size: 11px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .verdict-text {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .safe .verdict-text { color: var(--green); }
+    .phishing .verdict-text { color: var(--red); }
+
+    /* Confidence bar */
+    .conf-section { margin-bottom: 16px; }
+    .conf-header {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 7px;
+    }
+    .conf-value { color: var(--text); font-weight: 700; }
+    .conf-track {
+      height: 6px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .conf-fill {
+      height: 100%;
+      border-radius: 3px;
+      width: 0%;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .safe .conf-fill { background: linear-gradient(90deg, #16a34a, var(--green)); }
+    .phishing .conf-fill { background: linear-gradient(90deg, #b91c1c, var(--red)); }
+
+    /* URL display */
+    .url-display {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .url-display span { color: var(--text); }
+
+    /* Feature breakdown */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .feature-chip {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+    }
+    .feature-chip .fc-label { color: var(--muted); margin-bottom: 3px; }
+    .feature-chip .fc-val { color: var(--text); font-weight: 700; font-size: 13px; }
+    .feature-chip.flag .fc-val { color: var(--red); }
+    .feature-chip.ok .fc-val { color: var(--green); }
+
+    /* ── ERROR ────────────────────────────────────────────── */
+    #error-section { display: none; }
+    #error-section.visible { display: block; }
+    .error-box {
+      background: rgba(239,68,68,0.06);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: #fca5a5;
+    }
+
+    /* ── FOOTER ───────────────────────────────────────────── */
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      animation: fadeUp 0.7s 0.3s ease both;
+    }
+    footer span { color: var(--accent); }
+
+    /* ── ANIMATIONS ───────────────────────────────────────── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SCAN LINE EFFECT ─────────────────────────────────── */
+    .card::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(0,212,255,0.15), transparent);
+      animation: scanLine 4s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes scanLine {
+      from { top: 0; }
+      to   { top: 100%; }
+    }
+
+    /* ── RESPONSIVE ───────────────────────────────────────── */
+    @media (max-width: 520px) {
+      .input-row { flex-direction: column; }
+      .skeleton-preview { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
 </head>
-<body style="font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px;">
-    <h1>Phishing URL Detector</h1>
-    
-    <form id="detect-form" style="margin-bottom: 20px;">
-        <div style="margin-bottom: 10px;">
-            <label for="url" style="display: block; margin-bottom: 5px;">Enter URL to check:</label>
-            <input type="text" id="url" name="url" placeholder="https://example.com" required style="width: 100%; padding: 8px; box-sizing: border-box;">
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="badge">ML-Powered Threat Detection</div>
+    <h1>PhishGuard</h1>
+    <p class="subtitle">Paste a URL. We'll ask <span>100 decision trees</span> what they think.</p>
+  </header>
+
+  <!-- MAIN CARD -->
+  <div class="card">
+
+    <!-- INPUT -->
+    <div class="input-label">Target URL</div>
+    <div class="input-row">
+      <input
+        type="text"
+        id="url-input"
+        placeholder="https://totally-legit-paypal-login.com"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="submit-btn" onclick="analyzeURL()">SCAN →</button>
+    </div>
+
+    <!-- LOADING SECTION -->
+    <div id="loading-section">
+      <div class="divider"></div>
+
+      <!-- Skeleton preview cards -->
+      <div class="skeleton-preview">
+        <div class="skel-card">
+          <div class="skel-bar w60"></div>
+          <div class="skel-bar w100"></div>
+          <div class="skel-bar w80"></div>
         </div>
-        <button type="submit" style="padding: 10px 15px; background-color: #007bff; color: white; border: none; cursor: pointer;">
-            Analyze
-        </button>
-    </form>
+        <div class="skel-card">
+          <div class="skel-bar w40"></div>
+          <div class="skel-bar tall w100"></div>
+        </div>
+      </div>
 
-    <div id="loading" style="display: none; color: #666;">
-        Analyzing...
+      <!-- Terminal -->
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="dot r"></div>
+          <div class="dot y"></div>
+          <div class="dot g"></div>
+          <span class="terminal-title">phishguard — threat_analysis.py</span>
+        </div>
+        <div class="terminal-body" id="terminal-output">
+          <span class="t-cursor"></span>
+        </div>
+      </div>
+
+      <!-- Status message -->
+      <div class="status-msg" id="status-msg">
+        <span id="status-text" class="status-dots">Initializing threat scanner</span>
+      </div>
     </div>
 
-    <div id="resultArea" style="display: none; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-top: 20px;">
-        <h2 style="margin-top: 0;">Verdict: <span id="verdictText"></span></h2>
-        <p><strong>Analyzed URL:</strong> <span id="checkedUrl"></span></p>
-        <p><strong>Confidence:</strong> <span id="confidenceText"></span></p>
+    <!-- RESULT SECTION -->
+    <div id="result-section">
+      <div class="divider"></div>
+      <div class="result-card" id="result-card">
+        <div class="verdict-row">
+          <div class="verdict-icon" id="verdict-icon"></div>
+          <div>
+            <div class="verdict-label">Verdict</div>
+            <div class="verdict-text" id="verdict-text"></div>
+          </div>
+        </div>
+
+        <div class="conf-section">
+          <div class="conf-header">
+            <span>Model Confidence</span>
+            <span class="conf-value" id="conf-value"></span>
+          </div>
+          <div class="conf-track">
+            <div class="conf-fill" id="conf-fill"></div>
+          </div>
+        </div>
+
+        <div class="url-display">
+          Analyzed: <span id="result-url"></span>
+        </div>
+      </div>
     </div>
 
-    <div id="errorArea" style="display: none; padding: 15px; background-color: #f8d7da; color: #721c24; border-radius: 4px; margin-top: 20px;">
+    <!-- ERROR SECTION -->
+    <div id="error-section">
+      <div class="divider"></div>
+      <div class="error-box" id="error-box"></div>
     </div>
 
-    <script>
-        document.getElementById('detect-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const url = document.getElementById('url').value;
-            const resultArea = document.getElementById('resultArea');
-            const errorArea = document.getElementById('errorArea');
-            const loading = document.getElementById('loading');
-            
-            // Reset state
-            resultArea.style.display = 'none';
-            errorArea.style.display = 'none';
-            loading.style.display = 'block';
+  </div><!-- /card -->
 
-            try {
-                const response = await fetch('/api/detect/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ url: url })
-                });
+  <!-- FOOTER -->
+  <footer>
+    <p>Built by <span>NullPointers</span> · Random Forest · 11,430 URLs trained · <span>75% accuracy</span></p>
+    <p style="margin-top:6px;opacity:0.5;">Shadan College of Engineering & Technology · 2025-26</p>
+  </footer>
 
-                const data = await response.json();
-                loading.style.display = 'none';
+</div><!-- /page -->
 
-                if (response.ok) {
-                    resultArea.style.display = 'block';
-                    document.getElementById('checkedUrl').textContent = data.url;
-                    document.getElementById('confidenceText').textContent = data.confidence;
-                    
-                    const verdictEl = document.getElementById('verdictText');
-                    verdictEl.textContent = data.verdict;
-                    
-                    if (data.verdict === 'Safe') {
-                        verdictEl.style.color = '#28a745'; // green
-                        resultArea.style.borderColor = '#28a745';
-                    } else {
-                        verdictEl.style.color = '#dc3545'; // red
-                        resultArea.style.borderColor = '#dc3545';
-                    }
-                } else {
-                    errorArea.style.display = 'block';
-                    errorArea.textContent = data.error || 'An error occurred during verification.';
-                }
-            } catch (err) {
-                loading.style.display = 'none';
-                errorArea.style.display = 'block';
-                errorArea.textContent = 'Failed to connect to the server.';
-            }
-        });
-    </script>
+<script>
+// ── TERMINAL LINES ────────────────────────────────────────────────────────────
+const TERMINAL_LINES = [
+  { delay: 0,    text: 'import random_forest, urllib.parse, re',         type: 'dim'  },
+  { delay: 300,  text: '→ URL received. Unwrapping the onion...',         type: 'text' },
+  { delay: 700,  text: '→ urlparse() dissecting the URL anatomy...',      type: 'text' },
+  { delay: 1100, text: '→ Checking for @ symbol. Classic scammer trick.', type: 'text' },
+  { delay: 1500, text: '→ Counting hyphens. Found a suspicious amount.',  type: 'warn' },
+  { delay: 1900, text: '→ Sniffing for suspicious keywords...',           type: 'text' },
+  { delay: 2300, text: '→ Cross-referencing safe domain whitelist...',    type: 'text' },
+  { delay: 2700, text: '→ Loading model.pkl (100 grumpy decision trees).',type: 'text' },
+  { delay: 3100, text: '→ Waking up Tree #1... Tree #2... (×98 more).',   type: 'dim'  },
+  { delay: 3500, text: '→ VOTE TALLY: trees are arguing amongst themselves.', type: 'warn'},
+  { delay: 3900, text: '→ predict_proba() — calculating democracy score.',type: 'text' },
+  { delay: 4200, text: '→ Verdict locked. Summoning the result card...',  type: 'text' },
+];
+
+// ── STATUS MESSAGES (humorous) ────────────────────────────────────────────────
+const STATUS_MESSAGES = [
+  "Interrogating the URL",
+  "Asking 100 trees for their opinion",
+  "Suspicious keyword detected, eyebrow raised",
+  "The Random Forest is voting",
+  "Counting hyphens (uh oh)",
+  "Consulting the machine overlord",
+  "Trees are debating. Democracy is slow.",
+  "Extracting 9 features like a pro",
+  "Your URL is being judged",
+  "Cross-referencing with the hall of shame",
+  "plot twist loading",
+  "Almost there, just bribing the last tree",
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let terminalTimers = [];
+let statusTimer    = null;
+let statusIdx      = 0;
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function show(id)  { document.getElementById(id).classList.add('visible'); }
+function hide(id)  { document.getElementById(id).classList.remove('visible'); }
+function el(id)    { return document.getElementById(id); }
+
+function clearTimers() {
+  terminalTimers.forEach(clearTimeout);
+  terminalTimers = [];
+  clearInterval(statusTimer);
+}
+
+// ── TERMINAL ──────────────────────────────────────────────────────────────────
+function startTerminal() {
+  const out = el('terminal-output');
+  out.innerHTML = '<span class="t-cursor"></span>';
+
+  TERMINAL_LINES.forEach(({ delay, text, type }) => {
+    const t = setTimeout(() => {
+      const cursor = out.querySelector('.t-cursor');
+      const line = document.createElement('div');
+      line.className = 't-line';
+      line.innerHTML = `<span class="t-prompt">$</span><span class="t-${type}">${text}</span>`;
+      out.insertBefore(line, cursor);
+      out.scrollTop = out.scrollHeight;
+    }, delay);
+    terminalTimers.push(t);
+  });
+}
+
+// ── STATUS MESSAGES ───────────────────────────────────────────────────────────
+function startStatusMessages() {
+  statusIdx = 0;
+  el('status-text').textContent = STATUS_MESSAGES[0];
+  statusTimer = setInterval(() => {
+    statusIdx = (statusIdx + 1) % STATUS_MESSAGES.length;
+    const msgEl = el('status-text');
+    msgEl.style.opacity = '0';
+    setTimeout(() => {
+      msgEl.textContent = STATUS_MESSAGES[statusIdx];
+      msgEl.style.opacity = '1';
+    }, 300);
+  }, 1400);
+}
+
+// ── RESET UI ──────────────────────────────────────────────────────────────────
+function resetUI() {
+  hide('loading-section');
+  hide('result-section');
+  hide('error-section');
+  el('result-card').className = 'result-card';
+  el('conf-fill').style.width = '0%';
+  clearTimers();
+}
+
+// ── SHOW LOADING ──────────────────────────────────────────────────────────────
+function showLoading() {
+  resetUI();
+  el('submit-btn').disabled = true;
+  el('submit-btn').textContent = 'SCANNING...';
+  show('loading-section');
+  startTerminal();
+  startStatusMessages();
+}
+
+// ── SHOW RESULT ───────────────────────────────────────────────────────────────
+function showResult(data) {
+  clearTimers();
+  hide('loading-section');
+  el('submit-btn').disabled = false;
+  el('submit-btn').textContent = 'SCAN →';
+
+  const card      = el('result-card');
+  const isSafe    = !data.is_phishing;
+  const confidence = parseFloat(data.confidence) || 0;
+
+  card.className  = 'result-card ' + (isSafe ? 'safe' : 'phishing');
+  el('verdict-icon').textContent = isSafe ? '✅' : '🚨';
+  el('verdict-text').textContent = isSafe ? 'SAFE' : 'PHISHING DETECTED';
+  el('conf-value').textContent   = confidence.toFixed(1) + '%';
+  el('result-url').textContent   = data.url;
+
+  show('result-section');
+
+  // Animate confidence bar after a tick
+  setTimeout(() => {
+    el('conf-fill').style.width = Math.min(confidence, 100) + '%';
+  }, 50);
+}
+
+// ── SHOW ERROR ────────────────────────────────────────────────────────────────
+function showError(msg) {
+  clearTimers();
+  hide('loading-section');
+  el('submit-btn').disabled = false;
+  el('submit-btn').textContent = 'SCAN →';
+  el('error-box').textContent = '⚠ ' + msg;
+  show('error-section');
+}
+
+// ── MAIN ANALYZE FUNCTION ─────────────────────────────────────────────────────
+async function analyzeURL() {
+  const url = el('url-input').value.trim();
+  if (!url) {
+    el('url-input').focus();
+    el('url-input').style.borderColor = 'var(--red)';
+    setTimeout(() => { el('url-input').style.borderColor = ''; }, 1500);
+    return;
+  }
+
+  showLoading();
+
+  // Minimum display time so the animation plays properly (feels real)
+  const minTime = new Promise(r => setTimeout(r, 4600));
+
+  try {
+    const [response] = await Promise.all([
+      fetch('/api/detect/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      }),
+      minTime
+    ]);
+
+    const data = await response.json();
+
+    if (response.ok) {
+      showResult(data);
+    } else {
+      showError(data.error || 'The server returned an unexpected error.');
+    }
+  } catch (err) {
+    await minTime;
+    showError('Could not reach the server. Is Django running?');
+  }
+}
+
+// ── ENTER KEY ─────────────────────────────────────────────────────────────────
+el('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyzeURL();
+});
+</script>
 </body>
 </html>
